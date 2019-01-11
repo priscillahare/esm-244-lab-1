@@ -1,0 +1,132 @@
+---
+title: "lab_1_in_class"
+author: "Priscilla Hare"
+date: "1/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Objectives:
+
+- basic review of data wrangling
+- intro to spatial data in R with sf
+- into to Shiny apps
+
+1. Attatch packages
+```{r}
+
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(tmap)
+
+```
+
+2. Review on reading, exploring, wrangling, and visualizing data
+
+a. Read in data
+```{r}
+
+wine <- read_csv("wine_data.csv")
+
+```
+
+b. Wrangling
+```{r}
+
+#only keep columns country, province, winery, region_1, points, and price
+#rename province to state and then only keep Oregon, Washington, and California
+#create a new column for points per dollar value (ppd) and arrange high to low
+wine_new <- wine %>%
+  select(country, province, winery, region_1, points, price) %>% 
+  rename(state = province) %>% 
+  filter(state == "California"|
+         state == "Oregon"|
+         state == "Washington") %>% 
+  mutate(ppd = points/price) %>% 
+  arrange(-ppd)
+
+```
+
+c. Use group_by() and summarize() to find summary statistics by group
+```{r}
+
+wine_summary <- wine_new %>% 
+  group_by(state) %>% 
+  summarize(
+    mean_ppd = mean(ppd, na.rm = TRUE), #na.rm=TRUE removes 'NA' values before calculation
+    max_ppd = max(ppd, na.rm = TRUE)
+  )
+
+```
+
+d. A few gg-graphics
+
+Histrograms
+```{r}
+
+#side by side histograms
+wine_hists <- ggplot(wine_new, aes(x = ppd)) +
+  geom_histogram(aes(fill = state)) +
+  facet_wrap(~state, scales = "free")
+
+wine_hists
+
+
+```
+
+Scatterplot graph of price vs. points, with color determined by state, adding a linear model trendline on top of it
+```{r}
+
+wine_points <- ggplot(wine_new, aes(x = price, y = points)) +
+  geom_point(aes(color = state), alpha = 0.5) + #aalpha = 0.5 changes transparency
+  geom_smooth(color = "black", method = "lm", se = FALSE) +
+  scale_color_manual(values = c("royalblue", "mediumorchid1", "orange")) +
+  facet_wrap(~state) +
+  theme_light() 
+
+wine_points
+```
+
+2. Intro to spatial data in R: California Counties spatial data using sf
+
+a. Read in the data
+```{r}
+
+ca_counties <- st_read(dsn = ".", layer = "CA_Counties_TIGER2016") #use st_read to read in spatial data
+
+#plot(ca_counties)
+
+#simplify to only include county name and area of land
+
+ca_land <- ca_counties %>% 
+  select(NAME, ALAND)
+
+ca_pop_inc <- read_csv("ca_pop_inc.csv") %>% 
+  rename(NAME = COUNTY)
+
+#merge spatial data with population csv data
+ca_df <- full_join(ca_land, ca_pop_inc) %>% 
+  select(NAME, MedFamilyIncome)
+
+```
+d. Use geom_sf to make a map in ggplot
+```{r}
+
+ca_income <- ggplot(ca_df) +
+  geom_sf(aes(fill = MedFamilyIncome))
+
+ca_income
+
+
+ca_df_transform <- st_transform(ca_df, crs = 4326)
+
+leaflet(ca_df_transform) %>% 
+  addTiles() %>% 
+  addPolygons()
+
+```
+
